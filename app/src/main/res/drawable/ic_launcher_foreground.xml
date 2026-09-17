@@ -1,0 +1,41 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:pivotX="54"
+        android:pivotY="54">
+        <!-- Main Water Droplet Silhouette in pure crisp white -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M54,24 C54,24 36,47 36,62 C36,72 44,80 54,80 C64,80 72,72 72,62 C72,47 54,24 54,24 Z" />
+        <!-- Inner Water Droplet highlight -->
+        <path
+            android:fillColor="#E0F7FA"
+            android:pathData="M54,32 C54,32 41,50 41,62 C41,69.2 46.8,75 54,75 C61.2,75 67,69.2 67,62 C67,50 54,32 54,32 Z" />
+        <!-- Water Meter Circular Gauge inside droplet -->
+        <path
+            android:fillColor="#0288D1"
+            android:pathData="M54,50 C47.4,50 42,55.4 42,62 C42,68.6 47.4,74 54,74 C60.6,74 66,68.6 66,62 C66,55.4 60.6,50 54,50 Z" />
+        <!-- Gauge Inner Ring -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M54,53 C49,53 45,57 45,62 C45,67 49,71 54,71 C59,71 63,67 63,62 C63,57 59,53 54,53 Z" />
+        <!-- Gauge Tick Marks -->
+        <path
+            android:strokeColor="#0288D1"
+            android:strokeWidth="1.2"
+            android:pathData="M54,54 L54,56 M61,62 L59,62 M54,70 L54,68 M47,62 L49,62" />
+        <!-- Meter Needle / Indicator pointing to reading -->
+        <path
+            android:strokeColor="#D32F2F"
+            android:strokeWidth="1.6"
+            android:strokeLineCap="round"
+            android:pathData="M54,62 L59,56" />
+        <!-- Needle center pin -->
+        <path
+            android:fillColor="#D32F2F"
+            android:pathData="M54,60.5 A1.5,1.5 0 1,1 54,63.5 A1.5,1.5 0 1,1 54,60.5 Z" />
+    </group>
+</vector>

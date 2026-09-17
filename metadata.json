@@ -1,0 +1,6 @@
+{
+  "name": "Water Management",
+  "description": "Offline Water Management & Billing System with role-based access for Developer, Admin, Reading User, and Accountant.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
