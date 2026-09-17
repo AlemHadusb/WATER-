@@ -12,6 +12,8 @@ import java.util.UUID
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.SecretKeySpec
 
 object PasswordHasher {
     fun generateSalt(): String {
@@ -135,4 +137,60 @@ object DeviceIdentity {
         }
     }
 }
+
+object BackupCrypto {
+    private const val ALGORITHM = "AES/GCM/NoPadding"
+    private const val TAG_LENGTH_BIT = 128
+    private const val IV_LENGTH_BYTE = 12
+
+    private fun encodeBase64(bytes: ByteArray): String {
+        return try {
+            java.util.Base64.getEncoder().encodeToString(bytes)
+        } catch (_: Throwable) {
+            android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+        }
+    }
+
+    private fun decodeBase64(base64Str: String): ByteArray {
+        return try {
+            java.util.Base64.getDecoder().decode(base64Str)
+        } catch (_: Throwable) {
+            android.util.Base64.decode(base64Str, android.util.Base64.NO_WRAP)
+        }
+    }
+
+    fun deriveKey(passphrase: String): SecretKeySpec {
+        val digest = MessageDigest.getInstance("SHA-256")
+        val keyBytes = digest.digest(passphrase.toByteArray(Charsets.UTF_8))
+        return SecretKeySpec(keyBytes, "AES")
+    }
+
+    fun encryptPayload(plainText: String, secretKey: String): String {
+        val keySpec = deriveKey(secretKey)
+        val iv = ByteArray(IV_LENGTH_BYTE)
+        SecureRandom().nextBytes(iv)
+        val cipher = Cipher.getInstance(ALGORITHM)
+        cipher.init(Cipher.ENCRYPT_MODE, keySpec, GCMParameterSpec(TAG_LENGTH_BIT, iv))
+        val cipherText = cipher.doFinal(plainText.toByteArray(Charsets.UTF_8))
+        val combined = ByteArray(iv.size + cipherText.size)
+        System.arraycopy(iv, 0, combined, 0, iv.size)
+        System.arraycopy(cipherText, 0, combined, iv.size, cipherText.size)
+        return encodeBase64(combined)
+    }
+
+    fun decryptPayload(cipherTextBase64: String, secretKey: String): String {
+        val keySpec = deriveKey(secretKey)
+        val combined = decodeBase64(cipherTextBase64)
+        if (combined.size < IV_LENGTH_BYTE) throw IllegalArgumentException("Invalid encrypted payload")
+        val iv = ByteArray(IV_LENGTH_BYTE)
+        val cipherText = ByteArray(combined.size - IV_LENGTH_BYTE)
+        System.arraycopy(combined, 0, iv, 0, IV_LENGTH_BYTE)
+        System.arraycopy(combined, IV_LENGTH_BYTE, cipherText, 0, cipherText.size)
+        val cipher = Cipher.getInstance(ALGORITHM)
+        cipher.init(Cipher.DECRYPT_MODE, keySpec, GCMParameterSpec(TAG_LENGTH_BIT, iv))
+        val plainBytes = cipher.doFinal(cipherText)
+        return String(plainBytes, Charsets.UTF_8)
+    }
+}
+
 

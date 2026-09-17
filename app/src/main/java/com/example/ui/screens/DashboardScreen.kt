@@ -1,7 +1,9 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -10,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -20,6 +23,9 @@ import com.example.ui.components.StatsCard
 import com.example.ui.theme.*
 import com.example.viewmodel.AppScreen
 import com.example.viewmodel.WaterViewModel
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun DashboardScreen(
@@ -29,6 +35,11 @@ fun DashboardScreen(
     val currentUser by viewModel.currentUser.collectAsState()
     val totalCustomers by viewModel.totalCustomersCount.collectAsState()
     val activeCustomers by viewModel.activeCustomersCount.collectAsState()
+
+    val pendingSyncCount by viewModel.pendingSyncCount.collectAsState()
+    val pendingConflictCount by viewModel.pendingConflictCount.collectAsState()
+    val latestSyncLog by viewModel.latestSyncLog.collectAsState()
+    val isSyncing by viewModel.isSyncing.collectAsState()
 
     val currentMonth = viewModel.currentMonthFormatted
     val todayDate = viewModel.currentDateFormatted
@@ -88,6 +99,83 @@ fun DashboardScreen(
                     tint = WaterBluePrimary,
                     modifier = Modifier.size(36.dp)
                 )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Synchronization Status Indicator (Requirement 47)
+        Card(
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(2.dp),
+            modifier = Modifier.fillMaxWidth().testTag("sync_status_card")
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                    val (dotColor, statusTitle) = when {
+                        pendingConflictCount > 0 -> Pair(WaterRedExpired, "Sync Conflict ($pendingConflictCount)")
+                        pendingSyncCount > 0 -> Pair(WaterOrangePending, "Pending Sync ($pendingSyncCount)")
+                        else -> Pair(WaterGreenActive, "Synced")
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(dotColor)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Text(
+                            text = statusTitle,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        val lastSyncText = latestSyncLog?.dateTime?.let {
+                            "Last Sync: " + SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault()).format(Date(it))
+                        } ?: "Last Sync: Never"
+                        Text(
+                            text = lastSyncText,
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Button(
+                    onClick = { viewModel.syncNow() },
+                    enabled = !isSyncing,
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = WaterBluePrimary),
+                    modifier = Modifier.testTag("dashboard_sync_now_button")
+                ) {
+                    if (isSyncing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(14.dp),
+                            color = Color.White,
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Syncing", fontSize = 12.sp)
+                    } else {
+                        Icon(
+                            Icons.Default.Sync,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("SYNC NOW", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
         }
 

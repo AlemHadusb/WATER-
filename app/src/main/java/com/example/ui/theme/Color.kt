@@ -15,6 +15,7 @@ val WaterCardSurface = Color(0xFFFFFFFF)
 
 // Accent and State Colors
 val WaterGreenPaid = Color(0xFF2E7D32)
+val WaterGreenActive = Color(0xFF2E7D32)
 val WaterOrangePending = Color(0xFFEF6C00)
 val WaterRedExpired = Color(0xFFC62828)
 

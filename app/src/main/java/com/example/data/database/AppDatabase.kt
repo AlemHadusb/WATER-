@@ -26,9 +26,13 @@ import java.util.Locale
         Payment::class,
         License::class,
         AuditLog::class,
-        AppSetting::class
+        AppSetting::class,
+        PairedDevice::class,
+        SyncAuditLog::class,
+        SyncConflict::class,
+        BackupRecord::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -42,6 +46,10 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun licenseDao(): LicenseDao
     abstract fun auditLogDao(): AuditLogDao
     abstract fun appSettingDao(): AppSettingDao
+    abstract fun pairedDeviceDao(): PairedDeviceDao
+    abstract fun syncAuditLogDao(): SyncAuditLogDao
+    abstract fun syncConflictDao(): SyncConflictDao
+    abstract fun backupRecordDao(): BackupRecordDao
 
     companion object {
         @Volatile
@@ -54,6 +62,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "water_management_database.db"
                 )
+                    .fallbackToDestructiveMigration()
                     .addCallback(DatabaseCallback(scope))
                     .build()
                 INSTANCE = instance
@@ -81,9 +90,17 @@ abstract class AppDatabase : RoomDatabase() {
             val customerDao = database.customerDao()
             val appSettingDao = database.appSettingDao()
 
-            // 1. App name setting
+            // 1. App name setting & Sync / Backup defaults
             appSettingDao.setSetting(AppSetting("app_name", "WATER MANAGEMENT SYSTEM"))
             appSettingDao.setSetting(AppSetting("initial_setup_completed", "false"))
+            appSettingDao.setSetting(AppSetting("google_backup_account", ""))
+            appSettingDao.setSetting(AppSetting("google_backup_enabled", "false"))
+            appSettingDao.setSetting(AppSetting("google_backup_frequency", "Daily"))
+            appSettingDao.setSetting(AppSetting("google_backup_gmail_notification", ""))
+            appSettingDao.setSetting(AppSetting("google_backup_last_time", "0"))
+            appSettingDao.setSetting(AppSetting("google_backup_last_status", "Never"))
+            appSettingDao.setSetting(AppSetting("last_sync_time", "0"))
+            appSettingDao.setSetting(AppSetting("last_sync_status", "PENDING"))
 
             // 2. Default Developer account (Default password: MomLove@1)
             val devSalt = PasswordHasher.generateSalt()

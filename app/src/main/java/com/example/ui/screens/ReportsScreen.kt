@@ -12,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -30,6 +31,7 @@ fun ReportsScreen(
     val currentMonth = viewModel.currentMonthFormatted
     val todayDate = viewModel.currentDateFormatted
     val appName by viewModel.appName.collectAsState()
+    val isExporting by viewModel.isExportingExcel.collectAsState()
 
     val totalCustomers by viewModel.totalCustomersCount.collectAsState()
     val activeCustomers by viewModel.activeCustomersCount.collectAsState()
@@ -54,7 +56,7 @@ fun ReportsScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "Financial & Water Reports",
                     style = MaterialTheme.typography.titleLarge,
@@ -67,31 +69,65 @@ fun ReportsScreen(
                 )
             }
 
-            Button(
-                onClick = {
-                    shareReportSummary(
-                        context = context,
-                        appName = appName,
-                        month = currentMonth,
-                        date = todayDate,
-                        totalCustomers = totalCustomers,
-                        activeCustomers = activeCustomers,
-                        todayReadings = todayReadings,
-                        todayCollection = todayCollection,
-                        monthlyBilled = monthlyBilled,
-                        monthlyCollected = monthlyCollected,
-                        outstanding = outstandingBalance,
-                        paidCount = paidBills,
-                        unpaidCount = unpaidBills
-                    )
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = WaterBluePrimary),
-                shape = RoundedCornerShape(10.dp),
-                modifier = Modifier.testTag("share_report_button")
-            ) {
-                Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Export / Print")
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                // Export to Excel Button
+                Button(
+                    onClick = {
+                        viewModel.exportFinancialSummaryToExcel(
+                            context = context,
+                            totalCustomers = totalCustomers,
+                            activeCustomers = activeCustomers,
+                            todayReadings = todayReadings,
+                            todayCollection = todayCollection,
+                            monthlyBilled = monthlyBilled,
+                            monthlyCollected = monthlyCollected,
+                            outstanding = outstandingBalance,
+                            paidCount = paidBills,
+                            unpaidCount = unpaidBills
+                        )
+                    },
+                    enabled = !isExporting,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1B5E20)),
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier.testTag("export_financial_excel_button")
+                ) {
+                    if (isExporting) {
+                        CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp, color = Color.White)
+                    } else {
+                        Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Excel", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+
+                // Share text summary button
+                OutlinedButton(
+                    onClick = {
+                        shareReportSummary(
+                            context = context,
+                            appName = appName,
+                            month = currentMonth,
+                            date = todayDate,
+                            totalCustomers = totalCustomers,
+                            activeCustomers = activeCustomers,
+                            todayReadings = todayReadings,
+                            todayCollection = todayCollection,
+                            monthlyBilled = monthlyBilled,
+                            monthlyCollected = monthlyCollected,
+                            outstanding = outstandingBalance,
+                            paidCount = paidBills,
+                            unpaidCount = unpaidBills
+                        )
+                    },
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier.testTag("share_report_button")
+                ) {
+                    Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Share", fontSize = 12.sp)
+                }
             }
         }
 

@@ -83,13 +83,15 @@ fun WaterManagementApp(viewModel: WaterViewModel = viewModel()) {
     val navigationItems = remember(userRole) {
         when (userRole) {
             UserRole.READING_USER.name -> listOf(
-                NavigationItem(AppScreen.READINGS, "Readings", Icons.Default.Speed)
+                NavigationItem(AppScreen.READINGS, "Readings", Icons.Default.Speed),
+                NavigationItem(AppScreen.SETTINGS, "Sync", Icons.Default.Sync)
             )
             UserRole.ACCOUNTANT.name -> listOf(
                 NavigationItem(AppScreen.DASHBOARD, "Dashboard", Icons.Default.Dashboard),
                 NavigationItem(AppScreen.BILLS, "Bills", Icons.Default.Receipt),
                 NavigationItem(AppScreen.PAYMENTS, "Payments", Icons.Default.Payment),
-                NavigationItem(AppScreen.REPORTS, "Reports", Icons.Default.Assessment)
+                NavigationItem(AppScreen.REPORTS, "Reports", Icons.Default.Assessment),
+                NavigationItem(AppScreen.SETTINGS, "Sync", Icons.Default.Sync)
             )
             UserRole.ADMIN.name -> listOf(
                 NavigationItem(AppScreen.DASHBOARD, "Dashboard", Icons.Default.Dashboard),
@@ -97,7 +99,8 @@ fun WaterManagementApp(viewModel: WaterViewModel = viewModel()) {
                 NavigationItem(AppScreen.READINGS, "Readings", Icons.Default.Speed),
                 NavigationItem(AppScreen.BILLS, "Bills", Icons.Default.Receipt),
                 NavigationItem(AppScreen.TARIFFS, "Tariffs", Icons.Default.Tune),
-                NavigationItem(AppScreen.REPORTS, "Reports", Icons.Default.Assessment)
+                NavigationItem(AppScreen.REPORTS, "Reports", Icons.Default.Assessment),
+                NavigationItem(AppScreen.SETTINGS, "Settings", Icons.Default.Settings)
             )
             UserRole.DEVELOPER.name -> listOf(
                 NavigationItem(AppScreen.DASHBOARD, "Dashboard", Icons.Default.Dashboard),
@@ -107,7 +110,7 @@ fun WaterManagementApp(viewModel: WaterViewModel = viewModel()) {
                 NavigationItem(AppScreen.PAYMENTS, "Payments", Icons.Default.Payment),
                 NavigationItem(AppScreen.TARIFFS, "Tariffs", Icons.Default.Tune),
                 NavigationItem(AppScreen.USERS, "Users", Icons.Default.ManageAccounts),
-                NavigationItem(AppScreen.DEVELOPER_SETTINGS, "Settings", Icons.Default.Settings),
+                NavigationItem(AppScreen.SETTINGS, "Settings", Icons.Default.Settings),
                 NavigationItem(AppScreen.REPORTS, "Reports", Icons.Default.Assessment)
             )
             else -> listOf(
@@ -163,7 +166,8 @@ fun WaterManagementApp(viewModel: WaterViewModel = viewModel()) {
                 AppScreen.TARIFFS -> TariffManagementScreen(viewModel = viewModel)
                 AppScreen.REPORTS -> ReportsScreen(viewModel = viewModel)
                 AppScreen.USERS -> UserManagementScreen(viewModel = viewModel)
-                AppScreen.DEVELOPER_SETTINGS -> DeveloperSettingsScreen(viewModel = viewModel)
+                AppScreen.SETTINGS -> SettingsScreen(viewModel = viewModel)
+                AppScreen.DEVELOPER_SETTINGS -> SettingsScreen(viewModel = viewModel)
             }
         }
     }

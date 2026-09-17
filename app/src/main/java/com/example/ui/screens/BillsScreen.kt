@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -26,10 +27,12 @@ fun BillsScreen(
     viewModel: WaterViewModel,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val bills by viewModel.bills.collectAsState()
     val searchQuery by viewModel.billSearchQuery.collectAsState()
     val statusFilter by viewModel.billStatusFilter.collectAsState()
     val currentUser by viewModel.currentUser.collectAsState()
+    val isExporting by viewModel.isExportingExcel.collectAsState()
 
     var billToPay by remember { mutableStateOf<Bill?>(null) }
 
@@ -77,11 +80,39 @@ fun BillsScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        Text(
-            text = "Generated Bills (${bills.size})",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold
-        )
+        // Header and Excel Export Row
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Generated Bills (${bills.size})",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+
+            OutlinedButton(
+                onClick = { viewModel.exportBillsToExcel(context) },
+                enabled = !isExporting,
+                shape = RoundedCornerShape(8.dp),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                modifier = Modifier.testTag("export_bills_excel_button")
+            ) {
+                if (isExporting) {
+                    CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                } else {
+                    Icon(
+                        Icons.Default.FileDownload,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = Color(0xFF2E7D32)
+                    )
+                }
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Export Excel", fontSize = 12.sp, color = Color(0xFF2E7D32), fontWeight = FontWeight.SemiBold)
+            }
+        }
 
         Spacer(modifier = Modifier.height(8.dp))
 

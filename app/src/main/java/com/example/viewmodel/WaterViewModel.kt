@@ -6,7 +6,9 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.database.AppDatabase
 import com.example.data.model.*
 import com.example.data.repository.BillCalculationPreview
+import com.example.data.repository.GoogleBackupSettings
 import com.example.data.repository.LicenseStatusInfo
+import com.example.data.repository.SyncSummary
 import com.example.data.repository.WaterRepository
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -25,6 +27,7 @@ enum class AppScreen(val title: String) {
     TARIFFS("Tariff & Meter Rent"),
     REPORTS("Reports"),
     USERS("User Management"),
+    SETTINGS("Settings & Sync"),
     DEVELOPER_SETTINGS("System Settings")
 }
 
@@ -131,9 +134,41 @@ class WaterViewModel(application: Application) : AndroidViewModel(application) {
     private val _activeReceiptPayment = MutableStateFlow<Payment?>(null)
     val activeReceiptPayment: StateFlow<Payment?> = _activeReceiptPayment.asStateFlow()
 
+    // --- Device Sync & Pairing State ---
+    val pairedDevices: StateFlow<List<PairedDevice>> = repository.allPairedDevices
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val pendingConflicts: StateFlow<List<SyncConflict>> = repository.pendingConflicts
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val pendingConflictCount: StateFlow<Int> = repository.pendingConflictCount
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val syncAuditLogs: StateFlow<List<SyncAuditLog>> = repository.syncAuditLogs
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val latestSyncLog: StateFlow<SyncAuditLog?> = repository.latestSyncLog
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val pendingSyncCount: StateFlow<Int> = repository.pendingSyncCount
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val isSyncing = MutableStateFlow(false)
+    val generatedPairingCode = MutableStateFlow<String?>(null)
+    val pairingCodeExpiry = MutableStateFlow<Long>(0L)
+
+    // --- Google Drive Backup State ---
+    val backupRecords: StateFlow<List<BackupRecord>> = repository.allBackupRecords
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val isBackingUp = MutableStateFlow(false)
+    private val _googleBackupSettings = MutableStateFlow(GoogleBackupSettings())
+    val googleBackupSettings: StateFlow<GoogleBackupSettings> = _googleBackupSettings.asStateFlow()
+
     init {
         checkInitialSetup()
         refreshLicenseStatus()
+        loadGoogleBackupSettings()
     }
 
     fun clearMessages() {
@@ -521,6 +556,413 @@ class WaterViewModel(application: Application) : AndroidViewModel(application) {
                 onSuccess()
             }.onFailure {
                 showError(it.message ?: "Failed to restore backup")
+            }
+        }
+    }
+
+    fun loadGoogleBackupSettings() {
+        viewModelScope.launch {
+            _googleBackupSettings.value = repository.getGoogleBackupSettings()
+        }
+    }
+
+    fun syncNow(targetDeviceId: String? = null) {
+        val user = _currentUser.value ?: return
+        if (isSyncing.value) return
+        viewModelScope.launch {
+            isSyncing.value = true
+            clearMessages()
+            val result = repository.performRecordSync(user, targetDeviceId)
+            result.onSuccess { summary ->
+                showMessage(summary.message)
+            }.onFailure { error ->
+                showError(error.message ?: "Synchronization failed")
+            }
+            isSyncing.value = false
+        }
+    }
+
+    fun generatePairingCode(role: String, username: String, deviceName: String) {
+        val user = _currentUser.value ?: return
+        viewModelScope.launch {
+            clearMessages()
+            val result = repository.generatePairingCode(user, role, username, deviceName)
+            result.onSuccess { (code, expiry) ->
+                generatedPairingCode.value = code
+                pairingCodeExpiry.value = expiry
+                showMessage("Pairing Code generated: $code (valid for 10 minutes)")
+            }.onFailure {
+                showError(it.message ?: "Failed to generate pairing code")
+            }
+        }
+    }
+
+    fun pairDeviceWithCode(code: String, deviceName: String) {
+        val user = _currentUser.value ?: return
+        viewModelScope.launch {
+            clearMessages()
+            val result = repository.pairWithCode(user, code, deviceName)
+            result.onSuccess { dev ->
+                showMessage("Device paired successfully: ${dev.deviceName}")
+            }.onFailure {
+                showError(it.message ?: "Pairing failed")
+            }
+        }
+    }
+
+    fun approveDevice(deviceId: String) {
+        val user = _currentUser.value ?: return
+        viewModelScope.launch {
+            val result = repository.approvePairedDevice(user, deviceId)
+            result.onSuccess {
+                showMessage("Device approved successfully")
+            }.onFailure {
+                showError(it.message ?: "Failed to approve device")
+            }
+        }
+    }
+
+    fun disableDevice(deviceId: String) {
+        val user = _currentUser.value ?: return
+        viewModelScope.launch {
+            val result = repository.disablePairedDevice(user, deviceId)
+            result.onSuccess {
+                showMessage("Device disabled")
+            }.onFailure {
+                showError(it.message ?: "Failed to disable device")
+            }
+        }
+    }
+
+    fun removeDevice(deviceId: String) {
+        val user = _currentUser.value ?: return
+        viewModelScope.launch {
+            val result = repository.removePairedDevice(user, deviceId)
+            result.onSuccess {
+                showMessage("Device removed")
+            }.onFailure {
+                showError(it.message ?: "Failed to remove device")
+            }
+        }
+    }
+
+    fun resolveConflict(conflictId: Long, chooseLocal: Boolean) {
+        val user = _currentUser.value ?: return
+        viewModelScope.launch {
+            clearMessages()
+            val result = repository.resolveConflict(user, conflictId, chooseLocal)
+            result.onSuccess {
+                showMessage("Conflict resolved successfully")
+            }.onFailure {
+                showError(it.message ?: "Failed to resolve conflict")
+            }
+        }
+    }
+
+    fun saveGoogleBackupConfig(account: String, enabled: Boolean, frequency: String, notificationEmail: String) {
+        val user = _currentUser.value ?: return
+        viewModelScope.launch {
+            clearMessages()
+            val settings = GoogleBackupSettings(
+                accountEmail = account.trim(),
+                enabled = enabled,
+                frequency = frequency,
+                gmailNotification = notificationEmail.trim()
+            )
+            val result = repository.saveGoogleBackupSettings(user, settings)
+            result.onSuccess {
+                _googleBackupSettings.value = settings
+                showMessage("Google Backup settings saved successfully")
+            }.onFailure {
+                showError(it.message ?: "Failed to save settings")
+            }
+        }
+    }
+
+    fun backupNowGoogleDrive(account: String? = null) {
+        val user = _currentUser.value ?: return
+        if (isBackingUp.value) return
+        viewModelScope.launch {
+            isBackingUp.value = true
+            clearMessages()
+            val result = repository.createGoogleDriveBackup(user, account)
+            result.onSuccess { record ->
+                loadGoogleBackupSettings()
+                showMessage("Encrypted Google Drive backup created: ${record.backupName} (${record.fileSizeBytes / 1024} KB)")
+            }.onFailure {
+                showError(it.message ?: "Backup failed")
+            }
+            isBackingUp.value = false
+        }
+    }
+
+    fun restoreGoogleDriveBackup(recordId: Long, onSuccess: () -> Unit) {
+        val user = _currentUser.value ?: return
+        viewModelScope.launch {
+            clearMessages()
+            val result = repository.restoreFromGoogleDriveBackup(user, recordId)
+            result.onSuccess {
+                showMessage("Database restored safely from encrypted backup")
+                onSuccess()
+            }.onFailure {
+                showError(it.message ?: "Failed to restore backup")
+            }
+        }
+    }
+
+    fun applyDirectTransfer(payload: String, remoteDeviceId: String) {
+        val user = _currentUser.value ?: return
+        viewModelScope.launch {
+            clearMessages()
+            val result = repository.applyDirectTransferPayload(user, payload, remoteDeviceId)
+            result.onSuccess { summary ->
+                showMessage(summary.message)
+            }.onFailure {
+                showError(it.message ?: "Failed to apply peer sync bundle")
+            }
+        }
+    }
+
+    // --- Excel Export & Import Operations ---
+    val isExportingExcel = MutableStateFlow(false)
+    val isImportingExcel = MutableStateFlow(false)
+
+    fun exportCustomersToExcel(context: android.content.Context) {
+        viewModelScope.launch {
+            isExportingExcel.value = true
+            try {
+                val list = repository.getAllCustomersList()
+                val csv = com.example.util.ExcelExportImportHelper.generateCustomersCsv(list)
+                val result = com.example.util.ExcelExportImportHelper.exportAndShareFile(
+                    context = context,
+                    csvContent = csv,
+                    filePrefix = "Customers_List"
+                )
+                result.onSuccess { file ->
+                    showMessage("Exported ${list.size} customers to Excel (${file.name})")
+                }.onFailure { e ->
+                    showError("Excel export failed: ${e.message}")
+                }
+            } catch (e: Exception) {
+                showError("Export error: ${e.message}")
+            } finally {
+                isExportingExcel.value = false
+            }
+        }
+    }
+
+    fun exportBillsToExcel(context: android.content.Context) {
+        viewModelScope.launch {
+            isExportingExcel.value = true
+            try {
+                val list = repository.getAllBillsList()
+                val csv = com.example.util.ExcelExportImportHelper.generateBillsCsv(list)
+                val result = com.example.util.ExcelExportImportHelper.exportAndShareFile(
+                    context = context,
+                    csvContent = csv,
+                    filePrefix = "Water_Bills_Ledger"
+                )
+                result.onSuccess { file ->
+                    showMessage("Exported ${list.size} bills to Excel (${file.name})")
+                }.onFailure { e ->
+                    showError("Excel export failed: ${e.message}")
+                }
+            } catch (e: Exception) {
+                showError("Export error: ${e.message}")
+            } finally {
+                isExportingExcel.value = false
+            }
+        }
+    }
+
+    fun exportReadingsToExcel(context: android.content.Context) {
+        viewModelScope.launch {
+            isExportingExcel.value = true
+            try {
+                val list = repository.getAllReadingsList()
+                val csv = com.example.util.ExcelExportImportHelper.generateReadingsCsv(list)
+                val result = com.example.util.ExcelExportImportHelper.exportAndShareFile(
+                    context = context,
+                    csvContent = csv,
+                    filePrefix = "Meter_Readings"
+                )
+                result.onSuccess { file ->
+                    showMessage("Exported ${list.size} meter readings to Excel (${file.name})")
+                }.onFailure { e ->
+                    showError("Excel export failed: ${e.message}")
+                }
+            } catch (e: Exception) {
+                showError("Export error: ${e.message}")
+            } finally {
+                isExportingExcel.value = false
+            }
+        }
+    }
+
+    fun exportPaymentsToExcel(context: android.content.Context) {
+        viewModelScope.launch {
+            isExportingExcel.value = true
+            try {
+                val list = repository.getAllPaymentsList()
+                val csv = com.example.util.ExcelExportImportHelper.generatePaymentsCsv(list)
+                val result = com.example.util.ExcelExportImportHelper.exportAndShareFile(
+                    context = context,
+                    csvContent = csv,
+                    filePrefix = "Payment_Receipts"
+                )
+                result.onSuccess { file ->
+                    showMessage("Exported ${list.size} payments to Excel (${file.name})")
+                }.onFailure { e ->
+                    showError("Excel export failed: ${e.message}")
+                }
+            } catch (e: Exception) {
+                showError("Export error: ${e.message}")
+            } finally {
+                isExportingExcel.value = false
+            }
+        }
+    }
+
+    fun exportFinancialSummaryToExcel(
+        context: android.content.Context,
+        totalCustomers: Int,
+        activeCustomers: Int,
+        todayReadings: Int,
+        todayCollection: Double,
+        monthlyBilled: Double,
+        monthlyCollected: Double,
+        outstanding: Double,
+        paidCount: Int,
+        unpaidCount: Int
+    ) {
+        viewModelScope.launch {
+            isExportingExcel.value = true
+            try {
+                val billsList = repository.getAllBillsList()
+                val currentAppName = appName.value
+                val csv = com.example.util.ExcelExportImportHelper.generateFinancialReportCsv(
+                    appName = currentAppName,
+                    month = currentMonthFormatted,
+                    todayDate = currentDateFormatted,
+                    totalCustomers = totalCustomers,
+                    activeCustomers = activeCustomers,
+                    todayReadings = todayReadings,
+                    todayCollection = todayCollection,
+                    monthlyBilled = monthlyBilled,
+                    monthlyCollected = monthlyCollected,
+                    outstanding = outstanding,
+                    paidCount = paidCount,
+                    unpaidCount = unpaidCount,
+                    bills = billsList
+                )
+                val result = com.example.util.ExcelExportImportHelper.exportAndShareFile(
+                    context = context,
+                    csvContent = csv,
+                    filePrefix = "Water_Financial_Report"
+                )
+                result.onSuccess { file ->
+                    showMessage("Exported comprehensive report to Excel (${file.name})")
+                }.onFailure { e ->
+                    showError("Excel export failed: ${e.message}")
+                }
+            } catch (e: Exception) {
+                showError("Export error: ${e.message}")
+            } finally {
+                isExportingExcel.value = false
+            }
+        }
+    }
+
+    fun downloadCustomerTemplate(context: android.content.Context) {
+        val templateCsv = com.example.util.ExcelExportImportHelper.generateCustomerImportTemplate()
+        val result = com.example.util.ExcelExportImportHelper.exportAndShareFile(
+            context = context,
+            csvContent = templateCsv,
+            filePrefix = "Customer_Import_Template"
+        )
+        result.onSuccess { file ->
+            showMessage("Template generated: ${file.name}. Fill it out in Excel and import.")
+        }.onFailure { e ->
+            showError("Failed to share template: ${e.message}")
+        }
+    }
+
+    fun importCustomersFromUri(
+        context: android.content.Context,
+        uri: android.net.Uri,
+        onResult: (com.example.util.ExcelExportImportHelper.ImportResult) -> Unit
+    ) {
+        val user = _currentUser.value ?: run {
+            showError("Authentication required for import")
+            return
+        }
+        viewModelScope.launch {
+            isImportingExcel.value = true
+            try {
+                val inputStream = context.contentResolver.openInputStream(uri)
+                if (inputStream == null) {
+                    showError("Could not open selected file")
+                    isImportingExcel.value = false
+                    return@launch
+                }
+                val rows = inputStream.use {
+                    com.example.util.ExcelExportImportHelper.parseCustomersCsv(it)
+                }
+
+                if (rows.isEmpty()) {
+                    showError("No valid customer records found in the selected Excel/CSV file")
+                    isImportingExcel.value = false
+                    return@launch
+                }
+
+                val importRes = repository.importCustomersBulk(user, rows)
+                if (importRes.successfulCount > 0) {
+                    showMessage("Successfully imported ${importRes.successfulCount} customers into system")
+                } else {
+                    showError("No customers were imported. Check for duplicate meter numbers.")
+                }
+                onResult(importRes)
+            } catch (e: Exception) {
+                showError("Import failed: ${e.message}")
+            } finally {
+                isImportingExcel.value = false
+            }
+        }
+    }
+
+    fun importCustomersFromText(
+        text: String,
+        onResult: (com.example.util.ExcelExportImportHelper.ImportResult) -> Unit
+    ) {
+        val user = _currentUser.value ?: run {
+            showError("Authentication required for import")
+            return
+        }
+        viewModelScope.launch {
+            isImportingExcel.value = true
+            try {
+                val inputStream = text.byteInputStream(Charsets.UTF_8)
+                val rows = inputStream.use {
+                    com.example.util.ExcelExportImportHelper.parseCustomersCsv(it)
+                }
+
+                if (rows.isEmpty()) {
+                    showError("No valid rows detected. Please follow the format.")
+                    isImportingExcel.value = false
+                    return@launch
+                }
+
+                val importRes = repository.importCustomersBulk(user, rows)
+                if (importRes.successfulCount > 0) {
+                    showMessage("Successfully imported ${importRes.successfulCount} customers")
+                } else {
+                    showError("No customers were imported. (Skipped: ${importRes.skippedCount})")
+                }
+                onResult(importRes)
+            } catch (e: Exception) {
+                showError("Import error: ${e.message}")
+            } finally {
+                isImportingExcel.value = false
             }
         }
     }

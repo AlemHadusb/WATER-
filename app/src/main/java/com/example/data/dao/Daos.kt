@@ -44,6 +44,9 @@ interface CustomerDao {
     @Query("SELECT * FROM customers ORDER BY id DESC")
     fun getAllCustomers(): Flow<List<Customer>>
 
+    @Query("SELECT * FROM customers ORDER BY id ASC")
+    suspend fun getAllCustomersList(): List<Customer>
+
     @Query("SELECT * FROM customers WHERE active = 1 ORDER BY customerName ASC")
     fun getActiveCustomers(): Flow<List<Customer>>
 
@@ -75,14 +78,29 @@ interface CustomerDao {
     @Update
     suspend fun updateCustomer(customer: Customer)
 
-    @Query("UPDATE customers SET active = :active WHERE id = :id")
-    suspend fun setCustomerActive(id: Long, active: Boolean)
+    @Query("UPDATE customers SET active = :active, updatedAt = :timestamp, syncStatus = 'PENDING_SYNC' WHERE id = :customerId")
+    suspend fun setCustomerActive(customerId: Long, active: Boolean, timestamp: Long = System.currentTimeMillis())
+
+    @Query("SELECT COUNT(*) FROM customers WHERE syncStatus = 'PENDING_SYNC'")
+    fun getPendingCustomersCount(): Flow<Int>
+
+    @Query("SELECT * FROM customers WHERE syncStatus = 'PENDING_SYNC'")
+    suspend fun getPendingCustomers(): List<Customer>
+
+    @Query("UPDATE customers SET syncStatus = 'SYNCED' WHERE id IN (:ids)")
+    suspend fun markCustomersSynced(ids: List<Long>)
+
+    @Query("SELECT * FROM customers WHERE syncId = :syncId LIMIT 1")
+    suspend fun getCustomerBySyncId(syncId: String): Customer?
 }
 
 @Dao
 interface MeterReadingDao {
     @Query("SELECT * FROM meter_readings ORDER BY id DESC")
     fun getAllReadings(): Flow<List<MeterReading>>
+
+    @Query("SELECT * FROM meter_readings ORDER BY id ASC")
+    suspend fun getAllReadingsList(): List<MeterReading>
 
     @Query("SELECT * FROM meter_readings WHERE customerId = :customerId ORDER BY id DESC")
     fun getReadingsForCustomer(customerId: Long): Flow<List<MeterReading>>
@@ -98,6 +116,18 @@ interface MeterReadingDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertReading(reading: MeterReading): Long
+
+    @Query("SELECT COUNT(*) FROM meter_readings WHERE syncStatus = 'PENDING_SYNC'")
+    fun getPendingReadingsCount(): Flow<Int>
+
+    @Query("SELECT * FROM meter_readings WHERE syncStatus = 'PENDING_SYNC'")
+    suspend fun getPendingMeterReadings(): List<MeterReading>
+
+    @Query("UPDATE meter_readings SET syncStatus = 'SYNCED' WHERE id IN (:ids)")
+    suspend fun markReadingsSynced(ids: List<Long>)
+
+    @Query("SELECT * FROM meter_readings WHERE syncId = :syncId LIMIT 1")
+    suspend fun getReadingBySyncId(syncId: String): MeterReading?
 }
 
 @Dao
@@ -147,6 +177,9 @@ interface BillDao {
     @Query("SELECT * FROM bills ORDER BY id DESC")
     fun getAllBills(): Flow<List<Bill>>
 
+    @Query("SELECT * FROM bills ORDER BY id ASC")
+    suspend fun getAllBillsList(): List<Bill>
+
     @Query("SELECT * FROM bills WHERE customerId = :customerId ORDER BY id DESC")
     fun getBillsForCustomer(customerId: Long): Flow<List<Bill>>
 
@@ -191,12 +224,27 @@ interface BillDao {
 
     @Query("UPDATE bills SET amountPaid = :amountPaid, paymentStatus = :status WHERE id = :billId")
     suspend fun updatePaymentStatus(billId: Long, amountPaid: Double, status: String)
+
+    @Query("SELECT COUNT(*) FROM bills WHERE syncStatus = 'PENDING_SYNC'")
+    fun getPendingBillsCount(): Flow<Int>
+
+    @Query("SELECT * FROM bills WHERE syncStatus = 'PENDING_SYNC'")
+    suspend fun getPendingBills(): List<Bill>
+
+    @Query("UPDATE bills SET syncStatus = 'SYNCED' WHERE id IN (:ids)")
+    suspend fun markBillsSynced(ids: List<Long>)
+
+    @Query("SELECT * FROM bills WHERE syncId = :syncId LIMIT 1")
+    suspend fun getBillBySyncId(syncId: String): Bill?
 }
 
 @Dao
 interface PaymentDao {
     @Query("SELECT * FROM payments ORDER BY id DESC")
     fun getAllPayments(): Flow<List<Payment>>
+
+    @Query("SELECT * FROM payments ORDER BY id ASC")
+    suspend fun getAllPaymentsList(): List<Payment>
 
     @Query("SELECT * FROM payments WHERE billId = :billId ORDER BY id DESC")
     fun getPaymentsForBill(billId: Long): Flow<List<Payment>>
@@ -215,6 +263,18 @@ interface PaymentDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPayment(payment: Payment): Long
+
+    @Query("SELECT COUNT(*) FROM payments WHERE syncStatus = 'PENDING_SYNC'")
+    fun getPendingPaymentsCount(): Flow<Int>
+
+    @Query("SELECT * FROM payments WHERE syncStatus = 'PENDING_SYNC'")
+    suspend fun getPendingPayments(): List<Payment>
+
+    @Query("UPDATE payments SET syncStatus = 'SYNCED' WHERE id IN (:ids)")
+    suspend fun markPaymentsSynced(ids: List<Long>)
+
+    @Query("SELECT * FROM payments WHERE syncId = :syncId LIMIT 1")
+    suspend fun getPaymentBySyncId(syncId: String): Payment?
 }
 
 @Dao
@@ -255,3 +315,82 @@ interface AppSettingDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun setSetting(setting: AppSetting)
 }
+
+@Dao
+interface PairedDeviceDao {
+    @Query("SELECT * FROM paired_devices ORDER BY createdAt DESC")
+    fun getAllPairedDevices(): Flow<List<PairedDevice>>
+
+    @Query("SELECT * FROM paired_devices WHERE status != 'REMOVED' ORDER BY createdAt DESC")
+    fun getActivePairedDevices(): Flow<List<PairedDevice>>
+
+    @Query("SELECT * FROM paired_devices WHERE deviceId = :deviceId LIMIT 1")
+    suspend fun getDeviceById(deviceId: String): PairedDevice?
+
+    @Query("SELECT * FROM paired_devices WHERE pairingCode = :code AND pairingCodeExpiry > :currentTime LIMIT 1")
+    suspend fun getDeviceByValidPairingCode(code: String, currentTime: Long = System.currentTimeMillis()): PairedDevice?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertDevice(device: PairedDevice): Long
+
+    @Update
+    suspend fun updateDevice(device: PairedDevice)
+
+    @Query("UPDATE paired_devices SET status = :status WHERE deviceId = :deviceId")
+    suspend fun updateDeviceStatus(deviceId: String, status: String)
+
+    @Query("UPDATE paired_devices SET lastSyncTimestamp = :timestamp WHERE deviceId = :deviceId")
+    suspend fun updateLastSync(deviceId: String, timestamp: Long)
+
+    @Query("DELETE FROM paired_devices WHERE deviceId = :deviceId")
+    suspend fun deleteDevice(deviceId: String)
+}
+
+@Dao
+interface SyncAuditLogDao {
+    @Query("SELECT * FROM sync_audit_logs ORDER BY dateTime DESC LIMIT :limit")
+    fun getRecentSyncLogs(limit: Int = 100): Flow<List<SyncAuditLog>>
+
+    @Query("SELECT * FROM sync_audit_logs ORDER BY dateTime DESC LIMIT 1")
+    fun getLatestSyncLog(): Flow<SyncAuditLog?>
+
+    @Query("SELECT * FROM sync_audit_logs ORDER BY dateTime DESC LIMIT 1")
+    suspend fun getLatestSyncLogDirect(): SyncAuditLog?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSyncLog(log: SyncAuditLog): Long
+}
+
+@Dao
+interface SyncConflictDao {
+    @Query("SELECT * FROM sync_conflicts WHERE status = 'PENDING' ORDER BY remoteTimestamp DESC")
+    fun getPendingConflicts(): Flow<List<SyncConflict>>
+
+    @Query("SELECT COUNT(*) FROM sync_conflicts WHERE status = 'PENDING'")
+    fun getPendingConflictCount(): Flow<Int>
+
+    @Query("SELECT * FROM sync_conflicts WHERE id = :id LIMIT 1")
+    suspend fun getConflictById(id: Long): SyncConflict?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertConflict(conflict: SyncConflict): Long
+
+    @Query("UPDATE sync_conflicts SET status = :status, resolvedAt = :resolvedAt, resolvedBy = :resolvedBy WHERE id = :id")
+    suspend fun resolveConflict(id: Long, status: String, resolvedAt: Long, resolvedBy: String)
+}
+
+@Dao
+interface BackupRecordDao {
+    @Query("SELECT * FROM backup_records ORDER BY backupDate DESC")
+    fun getAllBackups(): Flow<List<BackupRecord>>
+
+    @Query("SELECT * FROM backup_records WHERE id = :id LIMIT 1")
+    suspend fun getBackupById(id: Long): BackupRecord?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertBackup(backup: BackupRecord): Long
+
+    @Query("DELETE FROM backup_records WHERE id = :id")
+    suspend fun deleteBackup(id: Long)
+}
+

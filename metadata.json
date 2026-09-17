@@ -1,6 +1,6 @@
 {
   "name": "Water Management",
-  "description": "Offline Water Management & Billing System with role-based access for Developer, Admin, Reading User, and Accountant.",
+  "description": "Offline Water Management & Billing System with role-based access, device-to-device peer sync, conflict resolution, and encrypted Google Drive backup.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

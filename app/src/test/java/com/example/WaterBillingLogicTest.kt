@@ -51,4 +51,27 @@ class WaterBillingLogicTest {
         val isValid = lastReading >= previousReading
         assertFalse("Should reject if last reading < previous reading", isValid)
     }
+
+    @Test
+    fun testBackupCryptoEncryptionAndDecryption() {
+        val payload = """{"customers":[{"meterNumber":"WM-001","customerName":"Abebe Kebede"}]}"""
+        val secretKey = "DEV-TEST-INSTALLATION-ID-12345"
+
+        val encrypted = com.example.security.BackupCrypto.encryptPayload(payload, secretKey)
+        assertNotNull(encrypted)
+        assertNotEquals(payload, encrypted)
+
+        val decrypted = com.example.security.BackupCrypto.decryptPayload(encrypted, secretKey)
+        assertEquals(payload, decrypted)
+    }
+
+    @Test
+    fun testPairingCodeFormat() {
+        val codeChars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+        val randomCode = (1..6).map { codeChars.random() }.joinToString("")
+        val fullCode = "WMS-$randomCode"
+
+        assertTrue(fullCode.startsWith("WMS-"))
+        assertEquals(10, fullCode.length)
+    }
 }
