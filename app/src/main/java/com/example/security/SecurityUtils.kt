@@ -143,19 +143,21 @@ object BackupCrypto {
     private const val TAG_LENGTH_BIT = 128
     private const val IV_LENGTH_BYTE = 12
 
+    @android.annotation.SuppressLint("NewApi")
     private fun encodeBase64(bytes: ByteArray): String {
         return try {
-            java.util.Base64.getEncoder().encodeToString(bytes)
-        } catch (_: Throwable) {
             android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+        } catch (_: Throwable) {
+            java.util.Base64.getEncoder().encodeToString(bytes)
         }
     }
 
+    @android.annotation.SuppressLint("NewApi")
     private fun decodeBase64(base64Str: String): ByteArray {
         return try {
-            java.util.Base64.getDecoder().decode(base64Str)
-        } catch (_: Throwable) {
             android.util.Base64.decode(base64Str, android.util.Base64.NO_WRAP)
+        } catch (_: Throwable) {
+            java.util.Base64.getDecoder().decode(base64Str)
         }
     }
 
